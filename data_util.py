@@ -5,12 +5,13 @@ def preprocess_cardio_dataset():
     raw_dataset_location = 'raw_datasets/'
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
     raw_dataframe = pd.read_csv(raw_dataset_location+cardio_dataset, sep=';', index_col = 'id')
-
+    print(raw_dataframe)
     one_hot_encoded = pd.get_dummies(raw_dataframe, columns = ['gender','cholesterol', 'smoke', 'alco', 'active'])
     y_true = one_hot_encoded['cardio'].to_numpy()
 
     one_hot_encoded = one_hot_encoded.drop('cardio', axis=1)
     X = one_hot_encoded.to_numpy()
+    print(one_hot_encoded)
     
     return X, y_true
 
@@ -65,12 +66,12 @@ def main():
     print('number of instances',len(X))
     print('number of positive classes: ',sum(y_true))
     clfs = []
+    # clfs.append(tree.DecisionTreeClassifier())
 
-    clfs.append(tree.DecisionTreeClassifier())
     clfs.append(GaussianNB())
 
     best_clfs = cross_validation(clfs, X_test, y_test)
-    model_test(best_clfs, X_test, y_test)
+    # model_test(best_clfs, X_test, y_test)
 
 if __name__ == "__main__":
     # execute only if run as a script
