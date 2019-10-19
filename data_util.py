@@ -3,17 +3,23 @@ import pandas as pd
 
 def preprocess_cardio_dataset():
     raw_dataset_location = 'raw_datasets/'
+    # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
     raw_dataframe = pd.read_csv(raw_dataset_location+cardio_dataset, sep=';', index_col = 'id')
-    print(raw_dataframe)
+    print(raw_dataframe.head(3))
+
+
+    print(raw_dataframe.describe(include='all'))
     one_hot_encoded = pd.get_dummies(raw_dataframe, columns = ['gender','cholesterol', 'smoke', 'alco', 'active'])
     y_true = one_hot_encoded['cardio'].to_numpy()
 
     one_hot_encoded = one_hot_encoded.drop('cardio', axis=1)
     X = one_hot_encoded.to_numpy()
-    print(one_hot_encoded)
+    # print(one_hot_encoded)
     
     return X, y_true
+
+        
 
 # this only works for binary classification
 def model_evaluation(clf, x_val, y_val):
@@ -32,7 +38,6 @@ def model_evaluation(clf, x_val, y_val):
 def model_test(best_clf, x_test, y_test):
     print('we are here')
     return
-
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
     skf = StratifiedKFold(n_splits=num_fold, random_state=10)
@@ -46,6 +51,7 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
 
             clf.fit(X_train, y_train)
             acc, precision, recall, f_score = model_evaluation(clf, X_val, y_val)
+            # print('acc')
             print(acc, precision, recall, f_score)
             if best_f_score < f_score:
                 best_clf = clf
