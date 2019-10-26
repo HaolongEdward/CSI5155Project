@@ -1,6 +1,8 @@
 import sklearn
 import pandas as pd
-
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 def preprocess_cardio_dataset():
     raw_dataset_location = 'raw_datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
@@ -15,16 +17,16 @@ def preprocess_cardio_dataset():
     after_blood_presure_cleanned = clean_blood_pressure(raw_dataframe)
 
     print(after_blood_presure_cleanned.describe(include='all'))
+    pandas_series_to_density(after_blood_presure_cleanned['height'], 'height after clean up')
 
-
-    one_hot_encoded = pd.get_dummies(raw_dataframe, columns = [ 'smoke', 'alco', 'active'])
+    one_hot_encoded = pd.get_dummies(after_blood_presure_cleanned, columns = [ 'smoke', 'alco', 'active'])
     
 
 
     y_true = one_hot_encoded['cardio'].to_numpy()
 
     one_hot_encoded = one_hot_encoded.drop('cardio', axis=1)
-    one_hot_encoded = one_hot_encoded.drop('gender', axis=1)
+    # one_hot_encoded = one_hot_encoded.drop('gender', axis=1)
     
 
     X = one_hot_encoded.to_numpy()
@@ -42,6 +44,11 @@ def clean_blood_pressure(df):
     count_ap_low_lower_than_lower_bound = 0
     count_ap_low_higher_than_upper_bound = 0
     count_ap_hi_lower_ap_lo = 0
+
+
+    pandas_series_to_density(df['ap_hi'], 'ap_hi before clean up')
+    pandas_series_to_density(df['ap_lo'], 'ap_lo before clean up')
+
     for index, row in df.iterrows():
         # print(type(row['ap_hi']))
         if row['ap_hi'] < row['ap_lo']:
@@ -71,8 +78,20 @@ def clean_blood_pressure(df):
     print("There are ", count_ap_low_lower_than_lower_bound, ' rows which ap_lo lower than ', ap_lo_lower_bound)
     print("There are ", count_ap_low_higher_than_upper_bound, ' rows which ap_lo larger than ', ap_lo_upper_bound)
     print("There are ", count_ap_hi_lower_ap_lo, ' rows which ap_lo is higher than ap_hi')
+    pandas_series_to_density(df['ap_hi'], 'ap_hi after clean up')
+    pandas_series_to_density(df['ap_lo'], 'ap_lo after clean up')
 
     return df
+
+def pandas_series_to_density(series, file_name):
+    
+    # print(type(series))
+    fig = series.plot.kde()
+    plt.savefig('density_plot/'+file_name+'.pdf')
+    plt.clf()
+
+    # fig.clf()
+
 
 # this only works for binary classification
 def model_evaluation(clf, x_val, y_val):
