@@ -9,4 +9,8 @@ Implement Bootstap for unseemble data
 
 Possible Experiments:
 	1. Try different model with or without BMI in data
-	
+
+Ensemble:
+	segment the clean-upped dataset by age
+
+Model_test

@@ -6,20 +6,73 @@ def preprocess_cardio_dataset():
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
     raw_dataframe = pd.read_csv(raw_dataset_location+cardio_dataset, sep=';', index_col = 'id')
-    print(raw_dataframe.head(3))
+    # print(raw_dataframe.head(3))
 
 
     print(raw_dataframe.describe(include='all'))
-    one_hot_encoded = pd.get_dummies(raw_dataframe, columns = ['gender','cholesterol', 'smoke', 'alco', 'active'])
+
+    # print('we are here')
+    after_blood_presure_cleanned = clean_blood_pressure(raw_dataframe)
+
+    print(after_blood_presure_cleanned.describe(include='all'))
+
+
+    one_hot_encoded = pd.get_dummies(raw_dataframe, columns = [ 'smoke', 'alco', 'active'])
+    
+
+
     y_true = one_hot_encoded['cardio'].to_numpy()
 
     one_hot_encoded = one_hot_encoded.drop('cardio', axis=1)
+    one_hot_encoded = one_hot_encoded.drop('gender', axis=1)
+    
+
     X = one_hot_encoded.to_numpy()
     # print(one_hot_encoded)
     
     return X, y_true
 
+def clean_blood_pressure(df):
+    ap_hi_lower_bound = 60
+    ap_lo_lower_bound = 40
+    ap_hi_upper_bound = 250
+    ap_lo_upper_bound = 140
+    count_ap_hi_lower_than_lower_bound = 0
+    count_ap_hi_higher_than_upper_bound = 0
+    count_ap_low_lower_than_lower_bound = 0
+    count_ap_low_higher_than_upper_bound = 0
+    count_ap_hi_lower_ap_lo = 0
+    for index, row in df.iterrows():
+        # print(type(row['ap_hi']))
+        if row['ap_hi'] < row['ap_lo']:
+            count_ap_hi_lower_ap_lo += 1
+            # print(row)
+            df = df.drop([index])
+            continue
+        if row['ap_hi'] < ap_hi_lower_bound:
+            count_ap_hi_lower_than_lower_bound += 1
+            df = df.drop([index])
+            continue
+        if row['ap_lo'] < ap_lo_lower_bound:
+            count_ap_low_lower_than_lower_bound += 1
+            df = df.drop([index])
+            continue
+        if row['ap_hi'] > ap_hi_upper_bound:
+            count_ap_hi_higher_than_upper_bound += 1
+            df = df.drop([index])
+            continue
+        if row['ap_lo'] > ap_lo_upper_bound:
+            count_ap_low_higher_than_upper_bound += 1
+            df = df.drop([index])
+            continue
         
+    print("There are ", count_ap_hi_lower_than_lower_bound, ' rows which ap_hi lower than ', ap_hi_lower_bound)
+    print("There are ", count_ap_hi_higher_than_upper_bound, ' rows which ap_hi larger than ', ap_hi_upper_bound)
+    print("There are ", count_ap_low_lower_than_lower_bound, ' rows which ap_lo lower than ', ap_lo_lower_bound)
+    print("There are ", count_ap_low_higher_than_upper_bound, ' rows which ap_lo larger than ', ap_lo_upper_bound)
+    print("There are ", count_ap_hi_lower_ap_lo, ' rows which ap_lo is higher than ap_hi')
+
+    return df
 
 # this only works for binary classification
 def model_evaluation(clf, x_val, y_val):
@@ -38,6 +91,8 @@ def model_evaluation(clf, x_val, y_val):
 def model_test(best_clf, x_test, y_test):
     print('we are here')
     return
+
+
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
     skf = StratifiedKFold(n_splits=num_fold, random_state=10)
