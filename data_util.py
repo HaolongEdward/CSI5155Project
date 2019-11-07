@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-def preprocess_cardio_dataset():
+def preprocess_cardio_dataset(normalization = True):
     raw_dataset_location = 'raw_datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
@@ -17,7 +17,8 @@ def preprocess_cardio_dataset():
     after_blood_presure_cleanned = clean_blood_pressure(raw_dataframe)
 
     print(after_blood_presure_cleanned.describe(include='all'))
-    pandas_series_to_density(after_blood_presure_cleanned['height'], 'height after clean up')
+    # pandas_series_to_density(after_blood_presure_cleanned['height'], 'height after clean up')
+
 
     one_hot_encoded = pd.get_dummies(after_blood_presure_cleanned, columns = [ 'smoke', 'alco', 'active'])
     
@@ -26,13 +27,44 @@ def preprocess_cardio_dataset():
     y_true = one_hot_encoded['cardio'].to_numpy()
 
     one_hot_encoded = one_hot_encoded.drop('cardio', axis=1)
-    # one_hot_encoded = one_hot_encoded.drop('gender', axis=1)
-    
+    one_hot_encoded = one_hot_encoded.drop('gender', axis=1)
 
     X = one_hot_encoded.to_numpy()
     # print(one_hot_encoded)
-    
+    # print('*******************************************')
+    # print('* PCA on the dataset after one_hot_encode *')
+    # print('*******************************************')
+    # my_PCA(X, n_components=13)
+    # print('*******************************************')
+    # print('* PCA on the dataset after normalization  *')
+    # print('*******************************************')
+    # my_PCA(normalized, n_components=13)
+    if normalization:
+        X = df_MinMaxNormalization(X, feature_min=-1, feature_max=1)
+        print('*******************************************')
+        print('*     We are using normlized dataset      *')
+        print('*******************************************')
+    else:
+        print('*******************************************')
+        print('*   We are NOT using normlized dataset    *')
+        print('*******************************************')
     return X, y_true
+
+
+    
+
+
+def df_MinMaxNormalization(np_arr, feature_min, feature_max):
+	from sklearn import preprocessing
+	min_max_scaler = preprocessing.MinMaxScaler(feature_range=(feature_min, feature_max))
+	x_scaled = min_max_scaler.fit_transform(np_arr)
+	return x_scaled
+
+def my_PCA(np_arr, n_components):
+	from sklearn.decomposition import PCA
+	pca = PCA(n_components=n_components)
+	pca.fit(np_arr) 
+	print(pca.explained_variance_ratio_)
 
 def clean_blood_pressure(df):
     ap_hi_lower_bound = 60
@@ -78,8 +110,8 @@ def clean_blood_pressure(df):
     print("There are ", count_ap_low_lower_than_lower_bound, ' rows which ap_lo lower than ', ap_lo_lower_bound)
     print("There are ", count_ap_low_higher_than_upper_bound, ' rows which ap_lo larger than ', ap_lo_upper_bound)
     print("There are ", count_ap_hi_lower_ap_lo, ' rows which ap_lo is higher than ap_hi')
-    pandas_series_to_density(df['ap_hi'], 'ap_hi after clean up')
-    pandas_series_to_density(df['ap_lo'], 'ap_lo after clean up')
+    # pandas_series_to_density(df['ap_hi'], 'ap_hi after clean up')
+    # pandas_series_to_density(df['ap_lo'], 'ap_lo after clean up')
 
     return df
 
@@ -115,10 +147,14 @@ def model_test(best_clf, x_test, y_test):
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
     skf = StratifiedKFold(n_splits=num_fold, random_state=10)
-    best_clfs = []
-    for clf in clfs:
+    for clf_name in clfs:
+        avg_matrics = [0,0,0,0]
+
+        print('we are trying classifier: ', clf_name)
+        clf = clfs[clf_name]
         best_f_score = 0
         best_clf = None
+        i = 1
         for train_index, val_index in skf.split(X, y_true):
             X_train, X_val = X[train_index], X[val_index]
             y_train, y_val = y_true[train_index], y_true[val_index]
@@ -126,33 +162,38 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
             clf.fit(X_train, y_train)
             acc, precision, recall, f_score = model_evaluation(clf, X_val, y_val)
             # print('acc')
-            print(acc, precision, recall, f_score)
-            if best_f_score < f_score:
-                best_clf = clf
-                best_f_score = f_score
-        best_clfs.append(best_clf)
+            print(' '+str(i)+' ', acc, precision, recall, f_score)
+            avg_matrics [0] += acc
+            avg_matrics [1] += precision
+            avg_matrics [2] += recall
+            avg_matrics [3] += f_score
+            i += 1
+        i-=1
+        print('avg',avg_matrics[0]/i,avg_matrics[1]/i,avg_matrics[2]/i,avg_matrics[3]/i)
 
-    return best_clfs
+    return 
 
 def main():
     from sklearn.model_selection import train_test_split
     from sklearn import tree
     from sklearn.naive_bayes import GaussianNB
-    X, y_true = preprocess_cardio_dataset()
+    X, y_true = preprocess_cardio_dataset(normalization = False)
     X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.33, random_state=42)
-    
-    # print(y_true)
 
     print('number of instances',len(X))
     print('number of positive classes: ',sum(y_true))
-    clfs = []
-    # clfs.append(tree.DecisionTreeClassifier())
+    clfs = {}
+    clfs['Decision Tree'] = tree.DecisionTreeClassifier()
+    clfs['naive_bayes'] = GaussianNB()
+    best_clfs = cross_validation(clfs, X_train, y_train)
 
-    clfs.append(GaussianNB())
-
-    best_clfs = cross_validation(clfs, X_test, y_test)
-    # model_test(best_clfs, X_test, y_test)
 
 if __name__ == "__main__":
     # execute only if run as a script
     main()
+
+
+
+
+
+
