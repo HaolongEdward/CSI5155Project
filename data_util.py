@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+
 def preprocess_cardio_dataset(normalization = True):
     raw_dataset_location = 'raw_datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
@@ -139,9 +140,6 @@ def model_evaluation(clf, x_val, y_val):
     f_score   = f1_score       (y_val, y_pred)
     return (acc, precision, recall, f_score)
 
-def model_test(best_clf, x_test, y_test):
-    print('we are here')
-    return
 
 
 def cross_validation(clfs, X, y_true, num_fold = 10):
@@ -173,19 +171,76 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
 
     return 
 
-def main():
-    from sklearn.model_selection import train_test_split
+def getMLP(input_dim, num_class):
+    # from keras.datasets import mnist
+    from keras.models import Sequential
+    from keras.layers import Dense, Dropout
+    from keras import backend as K
+    from keras.utils import multi_gpu_model
+
+    model = Sequential()
+    model.add(Dense(64, input_dim=input_dim, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(128, activation='relu'))
+    model.add(Dropout(0.5))
+    model.add(Dense(32, activation='relu'))
+    model.add(Dropout(0.5))
+    
+    # model.add(Dense(512, activation='relu'))
+    # model.add(Dense(1024, activation='relu'))
+    # model.add(Dense(512, activation='relu'))
+    # model.add(Dense(256, activation='relu'))
+    # model.add(Dropout(0.5))
+    # model.add(Dense(64, activation='relu'))
+    # model.add(Dense(16, activation='relu'))
+
+    model.add(Dense(num_class, activation='softmax'))
+
+    model = multi_gpu_model(model, gpus=2)
+
+    return model
+
+
+def DL_exp(x_train, x_test, y_train, y_test):
+    from keras.utils import to_categorical
+    from keras import optimizers
+    model = getMLP(x_train.shape[-1], num_class = 2)
+    y_train = to_categorical(y_train)
+    y_test = to_categorical(y_test)
+
+
+    model.compile(loss='categorical_crossentropy',
+              optimizer=optimizers.Adam(lr = 0.001),
+              metrics=['accuracy'])
+
+    model.fit(x_train, y_train,
+          epochs=100,
+          batch_size=8192)
+    score = model.evaluate(x_test, y_test, batch_size=128)
+    print(score)
+
+def ML_exp(X_train, X_test, y_train, y_test):
+    clfs = {}
     from sklearn import tree
     from sklearn.naive_bayes import GaussianNB
-    X, y_true = preprocess_cardio_dataset(normalization = False)
+    from sklearn.neighbors import KNeighborsClassifier
+
+    clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
+    clfs['Decision Tree'] = tree.DecisionTreeClassifier()
+    clfs['naive_bayes'] = GaussianNB()
+    best_clfs = cross_validation(clfs, X_train, y_train)
+
+def main():
+    from sklearn.model_selection import train_test_split
+    
+    X, y_true = preprocess_cardio_dataset(normalization = True)
     X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.33, random_state=42)
 
     print('number of instances',len(X))
     print('number of positive classes: ',sum(y_true))
-    clfs = {}
-    clfs['Decision Tree'] = tree.DecisionTreeClassifier()
-    clfs['naive_bayes'] = GaussianNB()
-    best_clfs = cross_validation(clfs, X_train, y_train)
+    ML_exp(X_train, X_test, y_train, y_test)
+    # DL_exp(X_train, X_test, y_train, y_test)
+    
 
 
 if __name__ == "__main__":
