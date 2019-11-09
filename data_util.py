@@ -29,6 +29,8 @@ def preprocess_cardio_dataset(normalization = True):
 
     one_hot_encoded = one_hot_encoded.drop('cardio', axis=1)
     one_hot_encoded = one_hot_encoded.drop('gender', axis=1)
+    
+    feature_names = list(one_hot_encoded.columns.values)
 
     X = one_hot_encoded.to_numpy()
     # print(one_hot_encoded)
@@ -40,6 +42,9 @@ def preprocess_cardio_dataset(normalization = True):
     # print('* PCA on the dataset after normalization  *')
     # print('*******************************************')
     # my_PCA(normalized, n_components=13)
+
+
+
     if normalization:
         X = df_MinMaxNormalization(X, feature_min=-1, feature_max=1)
         print('*******************************************')
@@ -49,7 +54,7 @@ def preprocess_cardio_dataset(normalization = True):
         print('*******************************************')
         print('*   We are NOT using normlized dataset    *')
         print('*******************************************')
-    return X, y_true
+    return X, y_true, feature_names
 
 
     
@@ -219,26 +224,33 @@ def DL_exp(x_train, x_test, y_train, y_test):
     score = model.evaluate(x_test, y_test, batch_size=128)
     print(score)
 
-def ML_exp(X_train, X_test, y_train, y_test):
+def ML_exp(X_train, X_test, y_train, y_test, feature_names):
     clfs = {}
     from sklearn import tree
     from sklearn.naive_bayes import GaussianNB
     from sklearn.neighbors import KNeighborsClassifier
+    from skrules import SkopeRules
 
     clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
     clfs['Decision Tree'] = tree.DecisionTreeClassifier()
     clfs['naive_bayes'] = GaussianNB()
+    clfs['SkopeRules'] = SkopeRules(max_depth_duplication=None,
+                     n_estimators=30,
+                     precision_min=0.2,
+                     recall_min=0.01,
+                     feature_names=feature_names)
+
     best_clfs = cross_validation(clfs, X_train, y_train)
 
 def main():
     from sklearn.model_selection import train_test_split
     
-    X, y_true = preprocess_cardio_dataset(normalization = True)
+    X, y_true, feature_names = preprocess_cardio_dataset(normalization = True)
     X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.33, random_state=42)
 
     print('number of instances',len(X))
     print('number of positive classes: ',sum(y_true))
-    ML_exp(X_train, X_test, y_train, y_test)
+    ML_exp(X_train, X_test, y_train, y_test, feature_names)
     # DL_exp(X_train, X_test, y_train, y_test)
     
 
