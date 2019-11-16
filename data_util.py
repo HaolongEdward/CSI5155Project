@@ -4,8 +4,9 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
+
 def preprocess_cardio_dataset(normalization = True):
-    raw_dataset_location = 'raw_datasets/'
+    raw_dataset_location = 'datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
     raw_dataframe = pd.read_csv(raw_dataset_location+cardio_dataset, sep=';', index_col = 'id')
@@ -23,16 +24,15 @@ def preprocess_cardio_dataset(normalization = True):
 
     one_hot_encoded = pd.get_dummies(after_blood_presure_cleanned, columns = [ 'smoke', 'alco', 'active'])
     
-
-
-    y_true = one_hot_encoded['cardio'].to_numpy()
-
-    one_hot_encoded = one_hot_encoded.drop('cardio', axis=1)
-    one_hot_encoded = one_hot_encoded.drop('gender', axis=1)
     
     feature_names = list(one_hot_encoded.columns.values)
+    print(one_hot_encoded.describe(include='all'))
+    # print(feature_names)
 
-    X = one_hot_encoded.to_numpy()
+    feature_dict = {}
+    for i in range(len(feature_names)):
+        feature_dict[i] = feature_names[i]
+
     # print(one_hot_encoded)
     # print('*******************************************')
     # print('* PCA on the dataset after one_hot_encode *')
@@ -46,7 +46,7 @@ def preprocess_cardio_dataset(normalization = True):
 
 
     if normalization:
-        X = df_MinMaxNormalization(X, feature_min=-1, feature_max=1)
+        X = df_MinMaxNormalization(one_hot_encoded, feature_min=-1, feature_max=1)
         print('*******************************************')
         print('*     We are using normlized dataset      *')
         print('*******************************************')
@@ -54,11 +54,29 @@ def preprocess_cardio_dataset(normalization = True):
         print('*******************************************')
         print('*   We are NOT using normlized dataset    *')
         print('*******************************************')
-    return X, y_true, feature_names
+
+    X = pd.DataFrame(X)
+
+    X = X.rename(columns=feature_dict)
+
+
+    X.to_csv('datasets/normalized.csv')
+    return 
 
 
     
+def load_dataset(name):
+    dataset_location = 'datasets/'
+    df = pd.read_csv(dataset_location+name, index_col = 0)
+    print(df.describe(include='all'))
 
+    y_true = df['cardio'].to_numpy()
+    print(y_true)
+    df = df.drop('cardio', axis=1)
+    df = df.drop('gender', axis=1)
+    feature_names = list(df.columns.values)
+    y_true[y_true == -1] = 0
+    return df.to_numpy(), y_true, feature_names
 
 def df_MinMaxNormalization(np_arr, feature_min, feature_max):
 	from sklearn import preprocessing
@@ -242,53 +260,24 @@ def ML_exp(X_train, X_test, y_train, y_test, feature_names):
 
     best_clfs = cross_validation(clfs, X_train, y_train)
 
-#Begin of Fish adds on ensemble model
-def ensemble_model(X_train, X_test, y_train, y_test, feature_names):
-    from sklearn import ensemble
-    from sklearn.ensemble import VotingClassifier
-    from sklearn import tree
-    from sklearn.naive_bayes import GaussianNB
-    from sklearn.neighbors import KNeighborsClassifier
-    from skrules import SkopeRules
-
-    model_1=KNeighborsClassifier(n_neighbors=3)
-    model_2=tree.DecisionTreeClassifier()
-    model_3=GaussianNB()
-    model_4=SkopeRules(max_depth_duplication=None,
-                     n_estimators=30,
-                     precision_min=0.2,
-                     recall_min=0.01,
-                     feature_names=feature_names)
-
-    model_1.fit(X_train,y_train)
-    model_2.fit(X_train,y_train)
-    model_3.fit(X_train,y_train)
-    model_4.fit(X_train,y_train)
-
-    pred1=model_1.predict(X_test)
-    pred2=model_2.predict(X_test)
-    pred3=model_3.predict(X_test)
-    pred4=model_4.predict(X_test)
-
-    final_pred = np.array([])
-    print("Ensemble model: Voting System")
-    for i in range(0,len(X_test)):
-        final_pred = np.append(final_pred, mode([pred1[i], pred2[i], pred3[i],pred4[i]]))
-    print(final_pred)
-    return final_pred
-#end of fish edit part
 
 def main():
     from sklearn.model_selection import train_test_split
-    
-    X, y_true, feature_names = preprocess_cardio_dataset(normalization = True)
+    dataset = 'normalized.csv'
+    # X, y_true, feature_names = preprocess_cardio_dataset(normalization = True)
+    X, y_true, feature_names = load_dataset(dataset)
+
+
+
     X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.33, random_state=42)
 
     print('number of instances',len(X))
-    print('number of positive classes: ',sum(y_true))
-    # ML_exp(X_train, X_test, y_train, y_test, feature_names)
+    unique, counts = np.unique(y_true, return_counts=True)
+    
+    print('classes distribution: ', dict(zip(unique, counts)))
+    ML_exp(X_train, X_test, y_train, y_test, feature_names)
     # DL_exp(X_train, X_test, y_train, y_test)
-    ensemble_model(X_train, X_test, y_train, y_test, feature_names)
+
 
     
 
