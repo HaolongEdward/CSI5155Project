@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
-
+import numpy as np
 def preprocess_cardio_dataset(normalization = True):
     raw_dataset_location = 'raw_datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
@@ -243,7 +243,7 @@ def ML_exp(X_train, X_test, y_train, y_test, feature_names):
     best_clfs = cross_validation(clfs, X_train, y_train)
 
 #Begin of Fish adds on ensemble model
-def ensemble_model(X_train, X_test, y_train, y_test,feature_names):
+def ensemble_model(X_train, X_test, y_train, y_test, feature_names):
     from sklearn import ensemble
     from sklearn.ensemble import VotingClassifier
     from sklearn import tree
@@ -251,7 +251,7 @@ def ensemble_model(X_train, X_test, y_train, y_test,feature_names):
     from sklearn.neighbors import KNeighborsClassifier
     from skrules import SkopeRules
 
-    model_1=KNeighborsClassifier(n_neighbours=3)
+    model_1=KNeighborsClassifier(n_neighbors=3)
     model_2=tree.DecisionTreeClassifier()
     model_3=GaussianNB()
     model_4=SkopeRules(max_depth_duplication=None,
@@ -286,8 +286,10 @@ def main():
 
     print('number of instances',len(X))
     print('number of positive classes: ',sum(y_true))
-    ML_exp(X_train, X_test, y_train, y_test, feature_names)
+    # ML_exp(X_train, X_test, y_train, y_test, feature_names)
     # DL_exp(X_train, X_test, y_train, y_test)
+    ensemble_model(X_train, X_test, y_train, y_test, feature_names)
+
     
 
 
