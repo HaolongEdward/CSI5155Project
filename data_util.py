@@ -244,6 +244,7 @@ def ML_exp(X_train, X_test, y_train, y_test, feature_names):
 
 #Begin of Fish adds on ensemble model
 def ensemble_model(X_train, X_test, y_train, y_test,feature_names):
+    from sklearn import ensemble
     from sklearn.ensemble import VotingClassifier
     from sklearn import tree
     from sklearn.naive_bayes import GaussianNB
@@ -274,7 +275,7 @@ def ensemble_model(X_train, X_test, y_train, y_test,feature_names):
     for i in range(0,len(X_test)):
         final_pred = np.append(final_pred, mode([pred1[i], pred2[i], pred3[i],pred4[i]]))
     print(final_pred)
-
+    return final_pred
 #end of fish edit part
 
 def main():
