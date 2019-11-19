@@ -71,11 +71,14 @@ def load_dataset(name):
     print(df.describe(include='all'))
 
     y_true = df['cardio'].to_numpy()
+    y_true[y_true == -1] = 0
     print(y_true)
     df = df.drop('cardio', axis=1)
     df = df.drop('gender', axis=1)
+
     feature_names = list(df.columns.values)
-    y_true[y_true == -1] = 0
+    
+    
     return df.to_numpy(), y_true, feature_names
 
 def df_MinMaxNormalization(np_arr, feature_min, feature_max):
@@ -150,24 +153,33 @@ def pandas_series_to_density(series, file_name):
 
 
 # this only works for binary classification
-def model_evaluation(clf, x_val, y_val):
+def model_evaluation(clf, x_val, y_val, backtrack_dict):
     from sklearn.metrics import accuracy_score
     from sklearn.metrics import precision_score
     from sklearn.metrics import recall_score
     from sklearn.metrics import f1_score
     y_pred = clf.predict(x_val)
 
+    wrong_instances = []
+
+    for i in range(len(y_pred)):
+        if y_pred[i] != y_val[i]:
+            wrong_instances.append(backtrack_dict[i])
+
+    
     acc       = accuracy_score (y_val, y_pred)
     precision = precision_score(y_val, y_pred)
     recall    = recall_score   (y_val, y_pred)
     f_score   = f1_score       (y_val, y_pred)
-    return (acc, precision, recall, f_score)
+    return (acc, precision, recall, f_score, wrong_instances)
 
+# def where_i_did_wrong():
 
 
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
     skf = StratifiedKFold(n_splits=num_fold, random_state=10)
+    wrong_instances_clf = {}
     for clf_name in clfs:
         avg_matrics = [0,0,0,0]
 
@@ -176,13 +188,23 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
         best_f_score = 0
         best_clf = None
         i = 1
+        wrong_instances = []
         for train_index, val_index in skf.split(X, y_true):
             X_train, X_val = X[train_index], X[val_index]
             y_train, y_val = y_true[train_index], y_true[val_index]
 
+            # print(val_index)
+            magic_num = 3
+
+            backtrack_dict = {}
+            for index in range(len(val_index)):
+                backtrack_dict[index] = val_index[index]
+
+
             clf.fit(X_train, y_train)
-            acc, precision, recall, f_score = model_evaluation(clf, X_val, y_val)
-            # print('acc')
+            acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict)
+            wrong_instances.extend(wrong_instances_fold)
+
             print(' '+str(i)+' ', acc, precision, recall, f_score)
             avg_matrics [0] += acc
             avg_matrics [1] += precision
@@ -191,8 +213,9 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
             i += 1
         i-=1
         print('avg',avg_matrics[0]/i,avg_matrics[1]/i,avg_matrics[2]/i,avg_matrics[3]/i)
+        wrong_instances_clf[clf_name] = wrong_instances
 
-    return 
+    return wrong_instances_clf
 
 def getMLP(input_dim, num_class):
     # from keras.datasets import mnist
@@ -242,7 +265,7 @@ def DL_exp(x_train, x_test, y_train, y_test):
     score = model.evaluate(x_test, y_test, batch_size=128)
     print(score)
 
-def ML_exp(X_train, X_test, y_train, y_test, feature_names):
+def ML_exp(X, y_true, feature_names):
     clfs = {}
     from sklearn import tree
     from sklearn.naive_bayes import GaussianNB
@@ -254,14 +277,18 @@ def ML_exp(X_train, X_test, y_train, y_test, feature_names):
     clfs['naive_bayes'] = GaussianNB()
     clfs['SkopeRules'] = SkopeRules(max_depth_duplication=None,
                      n_estimators=30,
-                     precision_min=0.2,
+                     precision_min=0.6,
                      recall_min=0.01,
                      feature_names=feature_names)
 
-    best_clfs = cross_validation(clfs, X_train, y_train)
+    wrong_instances_clf = cross_validation(clfs, X, y_true)
+    with open('wrong_instances_clf.txt', 'w+') as f:
+        for key in wrong_instances_clf:
+            f.write("%s:\n" % key)
+            f.write("%s\n" % wrong_instances_clf[key])
+            print(len(wrong_instances_clf[key]))
 
-
-def main():
+def exp():
     from sklearn.model_selection import train_test_split
     dataset = 'normalized.csv'
     # X, y_true, feature_names = preprocess_cardio_dataset(normalization = True)
@@ -269,15 +296,43 @@ def main():
 
 
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.33, random_state=42)
+    # X_train, X_test, y_train, y_test = train_test_split(X, y_true, test_size=0.33, random_state=42)
 
     print('number of instances',len(X))
     unique, counts = np.unique(y_true, return_counts=True)
     
     print('classes distribution: ', dict(zip(unique, counts)))
-    ML_exp(X_train, X_test, y_train, y_test, feature_names)
+    ML_exp(X, y_true, feature_names)
     # DL_exp(X_train, X_test, y_train, y_test)
 
+def outlier_exp():
+    file_name = 'wrong_instances_clf'
+    wrong_instances_clf = {}
+    num_clf = 0
+    all_instances = {}
+    all_did_wrong = []
+    with open('wrong_instances_clf.txt', 'r') as f:
+        content = f.readlines()
+        for line in content:
+            if line[0] == '[':
+                wrong_instances = [int(s) for s in line[1:-2].split(',')]
+                for wrong_instance in wrong_instances:
+                    all_instances[wrong_instance] = all_instances.get(wrong_instance, 0) + 1
+            else:
+                num_clf += 1
+    for instance in all_instances:
+        if all_instances[instance] == num_clf :
+            all_did_wrong += [instance]
+
+    print(len(all_did_wrong))
+
+
+
+
+
+def main():
+    
+    outlier_exp()
 
     
 
@@ -285,6 +340,16 @@ def main():
 if __name__ == "__main__":
     # execute only if run as a script
     main()
+
+
+
+
+
+
+
+
+
+
 
 
 
