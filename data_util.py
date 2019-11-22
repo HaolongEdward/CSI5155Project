@@ -5,7 +5,10 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import numpy as np
 
-def preprocess_cardio_dataset(normalization = True):
+def preprocess_cardio_dataset(
+    normalization = True, 
+    exclusive_all_did_wrong=True,
+    save = False, new_filename = None):
     raw_dataset_location = 'datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
@@ -20,6 +23,11 @@ def preprocess_cardio_dataset(normalization = True):
 
     print(after_blood_presure_cleanned.describe(include='all'))
     # pandas_series_to_density(after_blood_presure_cleanned['height'], 'height after clean up')
+
+    if exclusive_all_did_wrong:
+        all_did_wrong = outlier_exp()
+        after_blood_presure_cleanned = excluding_all_did_wrong(after_blood_presure_cleanned, all_did_wrong)
+
 
 
     one_hot_encoded = pd.get_dummies(after_blood_presure_cleanned, columns = [ 'smoke', 'alco', 'active'])
@@ -43,13 +51,16 @@ def preprocess_cardio_dataset(normalization = True):
     # print('*******************************************')
     # my_PCA(normalized, n_components=13)
 
-
+    X = one_hot_encoded
+    y_true = X['cardio'].to_numpy()
 
     if normalization:
-        X = df_MinMaxNormalization(one_hot_encoded, feature_min=-1, feature_max=1)
+        X = df_MinMaxNormalization(X, feature_min=-1, feature_max=1)
         print('*******************************************')
         print('*     We are using normlized dataset      *')
         print('*******************************************')
+        y_true[y_true == -1] = 0
+
     else:
         print('*******************************************')
         print('*   We are NOT using normlized dataset    *')
@@ -58,26 +69,49 @@ def preprocess_cardio_dataset(normalization = True):
     X = pd.DataFrame(X)
 
     X = X.rename(columns=feature_dict)
+    X = X.drop('cardio', axis=1)
+    X = X.drop('gender', axis=1)
+    feature_names = list(X.columns.values)
 
+    if save:
+        X.to_csv('datasets/'+new_filename+'.csv')
+    return X.to_numpy(), y_true, feature_names
 
-    X.to_csv('datasets/normalized.csv')
-    return 
+def excluding_all_did_wrong(df, all_did_wrong):
+    feature_names = list(df.columns.values)
+    df = df.to_numpy()
+    feature_dict = {}
+    for i in range(len(feature_names)):
+        feature_dict[i] = feature_names[i]
+    df = np.delete(df, all_did_wrong, axis=0)
 
+    # print(len(df))
+
+    df = pd.DataFrame(df)
+    df = df.rename(columns=feature_dict)
+    print('!!!after excluding all did wrong instances!!!')
+    print(df.describe(include='all'))
+    return df
 
     
-def load_dataset(name):
+def load_dataset(name, exclusive_all_did_wrong = False):
     dataset_location = 'datasets/'
     df = pd.read_csv(dataset_location+name, index_col = 0)
+    
     print(df.describe(include='all'))
+    feature_names = list(df.columns.values)
 
     y_true = df['cardio'].to_numpy()
     y_true[y_true == -1] = 0
-    print(y_true)
+    # print(y_true)
     df = df.drop('cardio', axis=1)
     df = df.drop('gender', axis=1)
 
-    feature_names = list(df.columns.values)
-    
+
+    if exclusive_all_did_wrong:
+        all_did_wrong = outlier_exp()
+        excluding_all_did_wrong(df, all_did_wrong)
+
     
     return df.to_numpy(), y_true, feature_names
 
@@ -178,9 +212,12 @@ def model_evaluation(clf, x_val, y_val, backtrack_dict):
 
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
+    from prettytable import PrettyTable
+
     skf = StratifiedKFold(n_splits=num_fold, random_state=10)
     wrong_instances_clf = {}
     for clf_name in clfs:
+
         avg_matrics = [0,0,0,0]
 
         print('we are trying classifier: ', clf_name)
@@ -188,8 +225,11 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
         best_f_score = 0
         best_clf = None
         i = 1
+        t = PrettyTable(['Fold', 'acc', 'precision', 'recall', 'f_score'])
+
         wrong_instances = []
         for train_index, val_index in skf.split(X, y_true):
+
             X_train, X_val = X[train_index], X[val_index]
             y_train, y_val = y_true[train_index], y_true[val_index]
 
@@ -205,15 +245,20 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
             acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict)
             wrong_instances.extend(wrong_instances_fold)
 
-            print(' '+str(i)+' ', acc, precision, recall, f_score)
+            # print(' '+str(i)+' ', acc, precision, recall, f_score)
+            t.add_row([' '+str(i)+' ', '{0:.3f}'.format(acc), '{0:.3f}'.format(precision), '{0:.3f}'.format(recall), '{0:.3f}'.format(f_score)])
+
             avg_matrics [0] += acc
             avg_matrics [1] += precision
             avg_matrics [2] += recall
             avg_matrics [3] += f_score
             i += 1
         i-=1
-        print('avg',avg_matrics[0]/i,avg_matrics[1]/i,avg_matrics[2]/i,avg_matrics[3]/i)
+        t.add_row(['avg','{0:.3f}'.format(avg_matrics[0]/i),'{0:.3f}'.format(avg_matrics[1]/i),'{0:.3f}'.format(avg_matrics[2]/i),'{0:.3f}'.format(avg_matrics[3]/i)])
+
+        # print('avg',avg_matrics[0]/i,avg_matrics[1]/i,avg_matrics[2]/i,avg_matrics[3]/i)
         wrong_instances_clf[clf_name] = wrong_instances
+        print(t)
 
     return wrong_instances_clf
 
@@ -282,17 +327,24 @@ def ML_exp(X, y_true, feature_names):
                      feature_names=feature_names)
 
     wrong_instances_clf = cross_validation(clfs, X, y_true)
-    with open('wrong_instances_clf.txt', 'w+') as f:
-        for key in wrong_instances_clf:
-            f.write("%s:\n" % key)
-            f.write("%s\n" % wrong_instances_clf[key])
-            print(len(wrong_instances_clf[key]))
+    return wrong_instances_clf 
+    
 
-def exp():
+def exp(preprocess_again = True):
     from sklearn.model_selection import train_test_split
     dataset = 'normalized.csv'
     # X, y_true, feature_names = preprocess_cardio_dataset(normalization = True)
-    X, y_true, feature_names = load_dataset(dataset)
+
+    exclusive_all_did_wrong = False
+
+
+    if preprocess_again:
+        X, y_true, feature_names = preprocess_cardio_dataset(
+            normalization = True, 
+            exclusive_all_did_wrong=exclusive_all_did_wrong,
+            save = False, new_filename = None)
+    else:
+        X, y_true, feature_names = load_dataset(dataset, all_did_wrong, exclusive_all_did_wrong)
 
 
 
@@ -302,8 +354,14 @@ def exp():
     unique, counts = np.unique(y_true, return_counts=True)
     
     print('classes distribution: ', dict(zip(unique, counts)))
-    ML_exp(X, y_true, feature_names)
-    # DL_exp(X_train, X_test, y_train, y_test)
+    wrong_instances_clf = ML_exp(X, y_true, feature_names)
+    if not exclusive_all_did_wrong:
+        with open('wrong_instances_clf.txt', 'w+') as f:
+            for key in wrong_instances_clf:
+                f.write("%s:\n" % key)
+                f.write("%s\n" % wrong_instances_clf[key])
+                print(len(wrong_instances_clf[key]))
+
 
 def outlier_exp():
     file_name = 'wrong_instances_clf'
@@ -321,19 +379,19 @@ def outlier_exp():
             else:
                 num_clf += 1
     for instance in all_instances:
-        if all_instances[instance] == num_clf :
+        if all_instances[instance] >= num_clf :
             all_did_wrong += [instance]
 
-    print(len(all_did_wrong))
-
+    print('There are', len(all_did_wrong), 'instances wrongly classified by at least', num_clf -1, 'classifier')
+    return all_did_wrong
 
 
 
 
 def main():
-    
-    outlier_exp()
 
+    # outlier_exp()
+    exp(preprocess_again = True)
     
 
 
