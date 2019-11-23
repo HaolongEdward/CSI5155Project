@@ -240,8 +240,13 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
             for index in range(len(val_index)):
                 backtrack_dict[index] = val_index[index]
 
-
-            clf.fit(X_train, y_train)
+            if clf_name == 'MLP':
+                clf.fit(x_train, y_train,
+                  verbose = 1,
+                  epochs=100,
+                  batch_size=8192)
+            else:
+                clf.fit(X_train, y_train)
             acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict)
             wrong_instances.extend(wrong_instances_fold)
 
@@ -305,6 +310,7 @@ def DL_exp(x_train, x_test, y_train, y_test):
               metrics=['accuracy'])
 
     model.fit(x_train, y_train,
+          verbose = 1,
           epochs=100,
           batch_size=8192)
     score = model.evaluate(x_test, y_test, batch_size=128)
@@ -317,6 +323,8 @@ def ML_exp(X, y_true, feature_names):
     from sklearn.neighbors import KNeighborsClassifier
     from skrules import SkopeRules
 
+    mlp = getMLP(X.shape[-1], num_class = 2)
+
     clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
     clfs['Decision Tree'] = tree.DecisionTreeClassifier()
     clfs['naive_bayes'] = GaussianNB()
@@ -325,6 +333,7 @@ def ML_exp(X, y_true, feature_names):
                      precision_min=0.6,
                      recall_min=0.01,
                      feature_names=feature_names)
+    clfs['MLP'] = mlp
 
     wrong_instances_clf = cross_validation(clfs, X, y_true)
     return wrong_instances_clf 
