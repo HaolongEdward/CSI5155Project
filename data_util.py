@@ -8,7 +8,8 @@ import numpy as np
 def preprocess_cardio_dataset(
     normalization = True, 
     exclusive_all_did_wrong=True,
-    save = False, new_filename = None):
+    save = False, new_filename = None,
+    secondary_label = None):
     raw_dataset_location = 'datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
@@ -54,6 +55,8 @@ def preprocess_cardio_dataset(
     X = one_hot_encoded
     y_true = X['cardio'].to_numpy()
 
+
+
     if normalization:
         X = df_MinMaxNormalization(X, feature_min=-1, feature_max=1)
         print('*******************************************')
@@ -70,7 +73,13 @@ def preprocess_cardio_dataset(
 
     X = X.rename(columns=feature_dict)
     X = X.drop('cardio', axis=1)
-    X = X.drop('gender', axis=1)
+
+    if secondary_label != None:
+        y_true_secondary = X[secondary_label].to_numpy()
+        X = X.drop(secondary_label, axis=1)
+        y_true = [y_true, y_true_secondary]
+
+
     feature_names = list(X.columns.values)
 
     if save:
@@ -185,9 +194,21 @@ def pandas_series_to_density(series, file_name):
 
     # fig.clf()
 
+def get_label_dict(Y, Y_onehot, num_classes):
+    label_dict = dict()
+    i = 0
+    while num_classes != 0:
+        # print(i)
+        key = np.array2string(Y_onehot[i])
+
+        if key not in label_dict:
+            num_classes -= 1
+            label_dict[key] = Y[i]
+        i += 1
+    return label_dict
 
 # this only works for binary classification
-def model_evaluation(clf, x_val, y_val, backtrack_dict):
+def model_evaluation(clf, x_val, y_val, backtrack_dict, label_dict = None):
     from sklearn.metrics import accuracy_score
     from sklearn.metrics import precision_score
     from sklearn.metrics import recall_score
@@ -195,7 +216,19 @@ def model_evaluation(clf, x_val, y_val, backtrack_dict):
     y_pred = clf.predict(x_val)
 
     wrong_instances = []
+    y_predict_classes_onthot = []
+    if label_dict != None:
+        for i in range(len(y_pred)):
+            maxElement = np.where(y_pred[i] == np.amax(y_pred[i]))[0][0]
+            temp = '['
+            temp += '0. ' * (maxElement)
+            temp += '1.'
+            temp += ' 0.' * (2-maxElement-1)
+            temp += ']'
+            y_predict_classes_onthot.append(label_dict[temp])
+            # print(y_predict_classes_onthot)
 
+        y_pred = y_predict_classes_onthot
     for i in range(len(y_pred)):
         if y_pred[i] != y_val[i]:
             wrong_instances.append(backtrack_dict[i])
@@ -213,6 +246,7 @@ def model_evaluation(clf, x_val, y_val, backtrack_dict):
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
     from prettytable import PrettyTable
+    from tensorflow.keras.utils import to_categorical
 
     skf = StratifiedKFold(n_splits=num_fold, random_state=10)
     wrong_instances_clf = {}
@@ -233,21 +267,28 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
             X_train, X_val = X[train_index], X[val_index]
             y_train, y_val = y_true[train_index], y_true[val_index]
 
-            # print(val_index)
-            magic_num = 3
 
             backtrack_dict = {}
             for index in range(len(val_index)):
                 backtrack_dict[index] = val_index[index]
 
             if clf_name == 'MLP':
-                clf.fit(x_train, y_train,
-                  verbose = 1,
+                y_train_org = y_train
+                # y_val_org = y_val
+                y_train = to_categorical(y_train)
+                # y_val = to_categorical(y_val)
+                train_label_dict = get_label_dict(y_train_org, y_train, 2)
+                # val_label_dict = get_label_dict(y_val_org, y_val, 2)
+
+                clf.fit(X_train, y_train,
+                  verbose = 2,
                   epochs=100,
-                  batch_size=8192)
+                  batch_size=8192)               
+                acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict, label_dict = train_label_dict)
+
             else:
                 clf.fit(X_train, y_train)
-            acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict)
+                acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict)
             wrong_instances.extend(wrong_instances_fold)
 
             # print(' '+str(i)+' ', acc, precision, recall, f_score)
@@ -269,10 +310,10 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
 
 def getMLP(input_dim, num_class):
     # from keras.datasets import mnist
-    from keras.models import Sequential
-    from keras.layers import Dense, Dropout
-    from keras import backend as K
-    from keras.utils import multi_gpu_model
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.layers import Dense, Dropout
+    from tensorflow.keras import backend
+    from tensorflow.keras.utils import multi_gpu_model
 
     model = Sequential()
     model.add(Dense(64, input_dim=input_dim, activation='relu'))
@@ -311,7 +352,7 @@ def DL_exp(x_train, x_test, y_train, y_test):
 
     model.fit(x_train, y_train,
           verbose = 1,
-          epochs=100,
+          epochs=1,
           batch_size=8192)
     score = model.evaluate(x_test, y_test, batch_size=128)
     print(score)
@@ -322,29 +363,34 @@ def ML_exp(X, y_true, feature_names):
     from sklearn.naive_bayes import GaussianNB
     from sklearn.neighbors import KNeighborsClassifier
     from skrules import SkopeRules
+    from tensorflow.keras import optimizers
 
-    mlp = getMLP(X.shape[-1], num_class = 2)
-
-    clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
-    clfs['Decision Tree'] = tree.DecisionTreeClassifier()
-    clfs['naive_bayes'] = GaussianNB()
+    
+    # clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
+    # clfs['Decision Tree'] = tree.DecisionTreeClassifier()
+    # clfs['naive_bayes'] = GaussianNB()
     clfs['SkopeRules'] = SkopeRules(max_depth_duplication=None,
                      n_estimators=30,
                      precision_min=0.6,
                      recall_min=0.01,
                      feature_names=feature_names)
+
+    mlp = getMLP(X.shape[-1], num_class = 2)
+    mlp.compile(loss='categorical_crossentropy',
+              optimizer=optimizers.Adam(lr = 0.001),
+              metrics=['accuracy'])
     clfs['MLP'] = mlp
 
     wrong_instances_clf = cross_validation(clfs, X, y_true)
     return wrong_instances_clf 
     
 
-def exp(preprocess_again = True):
+def exp(preprocess_again = True, exclusive_all_did_wrong = False):
     from sklearn.model_selection import train_test_split
     dataset = 'normalized.csv'
     # X, y_true, feature_names = preprocess_cardio_dataset(normalization = True)
 
-    exclusive_all_did_wrong = False
+    # exclusive_all_did_wrong = False
 
 
     if preprocess_again:
@@ -369,10 +415,10 @@ def exp(preprocess_again = True):
             for key in wrong_instances_clf:
                 f.write("%s:\n" % key)
                 f.write("%s\n" % wrong_instances_clf[key])
-                print(len(wrong_instances_clf[key]))
+                print(key, 'classifier wrongly classified',len(wrong_instances_clf[key], 'instances'))
 
 
-def outlier_exp():
+def outlier_exp(tolerate = 0):
     file_name = 'wrong_instances_clf'
     wrong_instances_clf = {}
     num_clf = 0
@@ -388,10 +434,10 @@ def outlier_exp():
             else:
                 num_clf += 1
     for instance in all_instances:
-        if all_instances[instance] >= num_clf :
+        if all_instances[instance] >= num_clf - tolerate:
             all_did_wrong += [instance]
 
-    print('There are', len(all_did_wrong), 'instances wrongly classified by at least', num_clf -1, 'classifier')
+    print('There are', len(all_did_wrong), 'instances wrongly classified by at least', num_clf - tolerate, 'classifier')
     return all_did_wrong
 
 
@@ -400,7 +446,7 @@ def outlier_exp():
 def main():
 
     # outlier_exp()
-    exp(preprocess_again = True)
+    exp(preprocess_again = True, exclusive_all_did_wrong = True)
     
 
 
