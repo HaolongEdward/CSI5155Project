@@ -1,8 +1,6 @@
 import sklearn
 import pandas as pd
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
+
 import numpy as np
 
 def preprocess_cardio_dataset(
@@ -186,7 +184,9 @@ def clean_blood_pressure(df):
     return df
 
 def pandas_series_to_density(series, file_name):
-    
+    import matplotlib
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
     # print(type(series))
     fig = series.plot.kde()
     plt.savefig('density_plot/'+file_name+'.pdf')
@@ -241,7 +241,14 @@ def model_evaluation(clf, x_val, y_val, backtrack_dict, label_dict = None):
     return (acc, precision, recall, f_score, wrong_instances)
 
 # def where_i_did_wrong():
+def reset_weights(model):
+    
+    import tensorflow as tf
 
+    session = tf.compat.v1.keras.backend.get_session(op_input_list=())
+    for layer in model.layers: 
+        if hasattr(layer, 'kernel_initializer'):
+            layer.kernel.initializer.run(session=session)
 
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
@@ -285,7 +292,7 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
                   epochs=100,
                   batch_size=8192)               
                 acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict, label_dict = train_label_dict)
-
+                reset_weights(clf)
             else:
                 clf.fit(X_train, y_train)
                 acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict)
@@ -358,22 +365,22 @@ def DL_exp(x_train, x_test, y_train, y_test):
     print(score)
 
 def ML_exp(X, y_true, feature_names):
-    clfs = {}
+    
     from sklearn import tree
     from sklearn.naive_bayes import GaussianNB
     from sklearn.neighbors import KNeighborsClassifier
     from skrules import SkopeRules
     from tensorflow.keras import optimizers
 
-    
+    clfs = {}
     # clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
     # clfs['Decision Tree'] = tree.DecisionTreeClassifier()
     # clfs['naive_bayes'] = GaussianNB()
-    clfs['SkopeRules'] = SkopeRules(max_depth_duplication=None,
-                     n_estimators=30,
-                     precision_min=0.6,
-                     recall_min=0.01,
-                     feature_names=feature_names)
+    # clfs['SkopeRules'] = SkopeRules(max_depth_duplication=None,
+    #                  n_estimators=30,
+    #                  precision_min=0.6,
+    #                  recall_min=0.01,
+    #                  feature_names=feature_names)
 
     mlp = getMLP(X.shape[-1], num_class = 2)
     mlp.compile(loss='categorical_crossentropy',
@@ -399,7 +406,7 @@ def exp(preprocess_again = True, exclusive_all_did_wrong = False):
             exclusive_all_did_wrong=exclusive_all_did_wrong,
             save = False, new_filename = None)
     else:
-        X, y_true, feature_names = load_dataset(dataset, all_did_wrong, exclusive_all_did_wrong)
+        X, y_true, feature_names = load_dataset(dataset, exclusive_all_did_wrong)
 
 
 
