@@ -2,38 +2,52 @@ import sklearn
 import pandas as pd
 
 import numpy as np
-
+import matplotlib
+matplotlib.use('TkAgg')
+from prettytable import PrettyTable
+import ensemble
 def preprocess_cardio_dataset(
     normalization = True, 
     exclusive_all_did_wrong=True,
+    is_clean_blood_pressure = True,
     save = False, new_filename = None,
+    PCA = False,
+    is_using_onehot = True,
+    include_gender = False,
     secondary_label = None):
     raw_dataset_location = 'datasets/'
     # cardio_coloumns = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active','cardio']
     cardio_dataset = 'cardiovascular-disease-dataset.csv'
-    raw_dataframe = pd.read_csv(raw_dataset_location+cardio_dataset, sep=';', index_col = 'id')
+    X = pd.read_csv(raw_dataset_location+cardio_dataset, sep=';', index_col = 'id')
     # print(raw_dataframe.head(3))
 
 
-    print(raw_dataframe.describe(include='all'))
+    # print(X.describe(include='all'))
 
     # print('we are here')
-    after_blood_presure_cleanned = clean_blood_pressure(raw_dataframe)
+    if is_clean_blood_pressure:
+        X = clean_blood_pressure(X)
+    # print(after_blood_presure_cleanned.describe(include='all'))
 
-    print(after_blood_presure_cleanned.describe(include='all'))
+
+
     # pandas_series_to_density(after_blood_presure_cleanned['height'], 'height after clean up')
+    # pandas_series_to_density(after_blood_presure_cleanned['height'], 'height_density')
+    # pandas_series_to_density(after_blood_presure_cleanned['weight'], 'weight_density')
+    
+
 
     if exclusive_all_did_wrong:
         all_did_wrong = outlier_exp()
-        after_blood_presure_cleanned = excluding_all_did_wrong(after_blood_presure_cleanned, all_did_wrong)
+        X = excluding_all_did_wrong(X, all_did_wrong)
 
 
-
-    one_hot_encoded = pd.get_dummies(after_blood_presure_cleanned, columns = [ 'smoke', 'alco', 'active'])
+    if is_using_onehot:
+        X = pd.get_dummies(X, columns = [ 'smoke', 'alco', 'active'])
     
     
-    feature_names = list(one_hot_encoded.columns.values)
-    print(one_hot_encoded.describe(include='all'))
+    feature_names = list(X.columns.values)
+    # print(X.describe(include='all'))
     # print(feature_names)
 
     feature_dict = {}
@@ -50,34 +64,57 @@ def preprocess_cardio_dataset(
     # print('*******************************************')
     # my_PCA(normalized, n_components=13)
 
-    X = one_hot_encoded
+    # X = one_hot_encoded
     y_true = X['cardio'].to_numpy()
 
+    if not include_gender:
+        X.drop('gender', axis=1)
 
-
-    if normalization:
-        X = df_MinMaxNormalization(X, feature_min=-1, feature_max=1)
-        print('*******************************************')
-        print('*     We are using normlized dataset      *')
-        print('*******************************************')
-        y_true[y_true == -1] = 0
-
-    else:
-        print('*******************************************')
-        print('*   We are NOT using normlized dataset    *')
-        print('*******************************************')
-
-    X = pd.DataFrame(X)
-
-    X = X.rename(columns=feature_dict)
     X = X.drop('cardio', axis=1)
 
     if secondary_label != None:
         y_true_secondary = X[secondary_label].to_numpy()
         X = X.drop(secondary_label, axis=1)
         y_true = [y_true, y_true_secondary]
+    
 
 
+    feature_names = list(X.columns.values)
+
+    if normalization:
+        print('*******************************************')
+        print('*     We are using normlized dataset      *')
+        print('*******************************************')
+
+        feature_names = list(X.columns.values)
+
+        X = df_MinMaxNormalization(X, feature_min=-1, feature_max=1)
+        
+        # y_true[y_true == -1] = 0
+
+        X = pd.DataFrame(X)
+        X = X.rename(columns=feature_dict)
+    else:
+        print('*******************************************')
+        print('*   We are NOT using normlized dataset    *')
+        print('*******************************************')
+
+    if PCA:
+        print('*******************************************')
+        print('*     We are applying PCA on dataset      *')
+        print('*******************************************')
+        feature_names = list(X.columns.values)
+
+        X = my_PCA(X, n_components=len(X.columns))
+        # my_PCA(X, n_components=5)
+
+    else:
+        print('*******************************************')
+        print('*   We are not applying PCA on dataset    *')
+        print('*******************************************')
+
+
+    X = pd.DataFrame(X)
     feature_names = list(X.columns.values)
 
     if save:
@@ -129,10 +166,19 @@ def df_MinMaxNormalization(np_arr, feature_min, feature_max):
 	return x_scaled
 
 def my_PCA(np_arr, n_components):
-	from sklearn.decomposition import PCA
-	pca = PCA(n_components=n_components)
-	pca.fit(np_arr) 
-	print(pca.explained_variance_ratio_)
+    from sklearn.decomposition import PCA
+    pca = PCA(n_components=n_components)
+    pca.fit(np_arr) 
+    # print()
+    print('The raw PCA variance ratio is:', pca.explained_variance_ratio_)
+    for i in range(n_components):
+        if pca.explained_variance_ratio_[i] < 0.01:
+            print('Selecting the first', i, 'components')
+            pca = PCA(n_components=i+1)
+            pca.fit(np_arr) 
+            print('PCA variance ratio after selecting is:', pca.explained_variance_ratio_)
+            return pca.transform(np_arr)
+    return pca.transform(np_arr)
 
 def clean_blood_pressure(df):
     ap_hi_lower_bound = 60
@@ -146,8 +192,8 @@ def clean_blood_pressure(df):
     count_ap_hi_lower_ap_lo = 0
 
 
-    pandas_series_to_density(df['ap_hi'], 'ap_hi before clean up')
-    pandas_series_to_density(df['ap_lo'], 'ap_lo before clean up')
+    # pandas_series_to_density(df['ap_hi'], 'ap_hi before clean up')
+    # pandas_series_to_density(df['ap_lo'], 'ap_lo before clean up')
 
     for index, row in df.iterrows():
         # print(type(row['ap_hi']))
@@ -184,8 +230,7 @@ def clean_blood_pressure(df):
     return df
 
 def pandas_series_to_density(series, file_name):
-    import matplotlib
-    matplotlib.use('TkAgg')
+    
     import matplotlib.pyplot as plt
     # print(type(series))
     fig = series.plot.kde()
@@ -252,11 +297,13 @@ def reset_weights(model):
 
 def cross_validation(clfs, X, y_true, num_fold = 10):
     from sklearn.model_selection import StratifiedKFold
-    from prettytable import PrettyTable
     from tensorflow.keras.utils import to_categorical
 
     skf = StratifiedKFold(n_splits=num_fold, random_state=10)
     wrong_instances_clf = {}
+
+    f1_records = {}
+
     for clf_name in clfs:
 
         avg_matrics = [0,0,0,0]
@@ -288,7 +335,7 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
                 # val_label_dict = get_label_dict(y_val_org, y_val, 2)
 
                 clf.fit(X_train, y_train,
-                  verbose = 2,
+                  verbose = 0,
                   epochs=100,
                   batch_size=8192)               
                 acc, precision, recall, f_score, wrong_instances_fold = model_evaluation(clf, X_val, y_val, backtrack_dict, label_dict = train_label_dict)
@@ -312,8 +359,9 @@ def cross_validation(clfs, X, y_true, num_fold = 10):
         # print('avg',avg_matrics[0]/i,avg_matrics[1]/i,avg_matrics[2]/i,avg_matrics[3]/i)
         wrong_instances_clf[clf_name] = wrong_instances
         print(t)
+        f1_records[clf_name] = avg_matrics[3]/i
 
-    return wrong_instances_clf
+    return wrong_instances_clf, f1_records
 
 def getMLP(input_dim, num_class):
     # from keras.datasets import mnist
@@ -373,14 +421,14 @@ def ML_exp(X, y_true, feature_names):
     from tensorflow.keras import optimizers
 
     clfs = {}
-    # clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
-    # clfs['Decision Tree'] = tree.DecisionTreeClassifier()
-    # clfs['naive_bayes'] = GaussianNB()
-    # clfs['SkopeRules'] = SkopeRules(max_depth_duplication=None,
-    #                  n_estimators=30,
-    #                  precision_min=0.6,
-    #                  recall_min=0.01,
-    #                  feature_names=feature_names)
+    clfs['KNN'] = KNeighborsClassifier(n_neighbors=3)
+    clfs['DT'] = tree.DecisionTreeClassifier()
+    clfs['NB'] = GaussianNB()
+    clfs['RB'] = SkopeRules(max_depth_duplication=None,
+                     n_estimators=30,
+                     precision_min=0.6,
+                     recall_min=0.01,
+                     feature_names=feature_names)
 
     mlp = getMLP(X.shape[-1], num_class = 2)
     mlp.compile(loss='categorical_crossentropy',
@@ -388,11 +436,16 @@ def ML_exp(X, y_true, feature_names):
               metrics=['accuracy'])
     clfs['MLP'] = mlp
 
-    wrong_instances_clf = cross_validation(clfs, X, y_true)
-    return wrong_instances_clf 
+    clfs['Voting'] = ensemble.get_VotingClassifier_ensemble_model(feature_names)
+    boosting_clfs = ensemble.get_ada_boosting_clfs(feature_names)
+    for key in boosting_clfs:
+        clfs[key] = boosting_clfs[key]
+
+    wrong_instances_clf, f1_records = cross_validation(clfs, X, y_true)
+    return wrong_instances_clf, f1_records
     
 
-def exp(preprocess_again = True, exclusive_all_did_wrong = False):
+def exp(preprocess_again = True, exclusive_all_did_wrong = False, normalization = True, PCA = False, is_clean_blood_pressure = False, is_using_onehot = True):
     from sklearn.model_selection import train_test_split
     dataset = 'normalized.csv'
     # X, y_true, feature_names = preprocess_cardio_dataset(normalization = True)
@@ -402,8 +455,10 @@ def exp(preprocess_again = True, exclusive_all_did_wrong = False):
 
     if preprocess_again:
         X, y_true, feature_names = preprocess_cardio_dataset(
-            normalization = True, 
+            normalization = normalization, 
+            is_clean_blood_pressure = is_clean_blood_pressure, 
             exclusive_all_did_wrong=exclusive_all_did_wrong,
+            is_using_onehot = is_using_onehot,
             save = False, new_filename = None)
     else:
         X, y_true, feature_names = load_dataset(dataset, exclusive_all_did_wrong)
@@ -416,14 +471,14 @@ def exp(preprocess_again = True, exclusive_all_did_wrong = False):
     unique, counts = np.unique(y_true, return_counts=True)
     
     print('classes distribution: ', dict(zip(unique, counts)))
-    wrong_instances_clf = ML_exp(X, y_true, feature_names)
+    wrong_instances_clf, f1_records = ML_exp(X, y_true, feature_names)
     if not exclusive_all_did_wrong:
         with open('wrong_instances_clf.txt', 'w+') as f:
             for key in wrong_instances_clf:
                 f.write("%s:\n" % key)
                 f.write("%s\n" % wrong_instances_clf[key])
-                print(key, 'classifier wrongly classified',len(wrong_instances_clf[key], 'instances'))
-
+                print(key, 'classifier wrongly classified',len(wrong_instances_clf[key]), 'instances')
+    return f1_records
 
 def outlier_exp(tolerate = 0):
     file_name = 'wrong_instances_clf'
@@ -448,14 +503,48 @@ def outlier_exp(tolerate = 0):
     return all_did_wrong
 
 
+def format_row(f1_records, keys):
+    second_half_row = []
+
+    for key in keys:
+        second_half_row.append('{0:.3f}'.format(f1_records[key]))
+
+    return second_half_row
+
+def truth_combination(num_of_variable):
+    import itertools
+    l=[False,True]
+    return [list(i) for i in itertools.product(l,repeat=num_of_variable)]
 
 
 def main():
 
     # outlier_exp()
-    exp(preprocess_again = True, exclusive_all_did_wrong = True)
-    
+    # preprocess_cardio_dataset(
+    #     normalization = True, 
+    #     exclusive_all_did_wrong=False,
+    #     save = False, new_filename = None,
+    #     PCA = True,
+    #     secondary_label = 'gender')
+    testcases = truth_combination(5)
 
+    cols =  ['is_clean_blood_pressure', 'normalization', 'PCA', 'exclusive_all_did_wrong', 'is_using_onehot']
+
+    f1_records = exp(preprocess_again = True, is_clean_blood_pressure = testcases[0][0], normalization = testcases[0][1], PCA = testcases[0][2], exclusive_all_did_wrong = testcases[0][3], is_using_onehot = testcases[0][4])
+    keys = list(f1_records.keys())
+    # print(keys)
+    cols.extend(keys)
+    final_result = PrettyTable(cols)
+
+    final_result.add_row([testcases[0][0], testcases[0][1], testcases[0][2], testcases[0][3], testcases[0][4]] + format_row(f1_records, keys))
+    
+    for i in range(1, len(testcases)):
+        f1_records = exp(preprocess_again = True, is_clean_blood_pressure = testcases[i][0], normalization = testcases[i][1], PCA = testcases[i][2], exclusive_all_did_wrong = testcases[i][3], is_using_onehot = testcases[i][4])    
+        final_result.add_row([testcases[i][0], testcases[i][1], testcases[i][2], testcases[i][3], testcases[i][4]] + format_row(f1_records, keys))
+
+
+    
+    print(final_result)
 
 if __name__ == "__main__":
     # execute only if run as a script

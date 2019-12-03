@@ -1,6 +1,0 @@
-Rules for iris setosa
-None
-Rules for iris versicolor
-None
-Rules for iris virginica
-None

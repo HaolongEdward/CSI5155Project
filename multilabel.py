@@ -107,11 +107,11 @@ def cross_validation(clfs, X, y_true, cardio_dict, gender_dict, num_fold = 10):
                 backtrack_dict[index] = val_index[index]
 
             clf.fit(X_train, y_train,
-                  verbose = 1,
+                  verbose = 0,
                   epochs=100,
                   batch_size=8192)               
             acc, precision, recall, f_score = model_evaluation(clf, X_val, y_val, cardio_dict, gender_dict)
-
+            data_util.reset_weights(clf)
             
             # wrong_instances.extend(wrong_instances_fold)
 
@@ -149,19 +149,55 @@ def cross_validation(clfs, X, y_true, cardio_dict, gender_dict, num_fold = 10):
 def main():
     from tensorflow.keras import optimizers
     X, y_true, feature_names = data_util.preprocess_cardio_dataset(
-        normalization = True, 
-        exclusive_all_did_wrong=False,
-        save = False, new_filename = None,
-        secondary_label = 'gender')
+    normalization = True, 
+    exclusive_all_did_wrong=True,
+    is_clean_blood_pressure = True,
+    save = False, new_filename = None,
+    PCA = False,
+    is_using_onehot = True,
+    include_gender = True,
+    secondary_label = 'gender')
 
 
     y_true_cardio = y_true[0]
     y_true_gender = y_true[1]
-    y_true_gender[y_true_gender == -1] = 0
+
+    y_true_gender[y_true_gender == 2] = 0
+    
+    mlp = data_util.getMLP(X.shape[-1], num_class = 2)
+
+    mlp.compile(loss='binary_crossentropy',
+              optimizer=optimizers.Adam(lr = 0.001),
+              metrics=['accuracy'])
+
+    clfs = {'MLP':mlp}
+    print('we are trying to classify label \'gender\'')
+    print('+--------------------------------------------+')
+    print('|                   gender                   |')
+    print('+--------------------------------------------+')
+    data_util.cross_validation(clfs, X, y_true_gender, num_fold = 10)
+
+
+
+    mlp = data_util.getMLP(X.shape[-1], num_class = 2)
+
+    mlp.compile(loss='binary_crossentropy',
+              optimizer=optimizers.Adam(lr = 0.001),
+              metrics=['accuracy'])
+
+    clfs = {'MLP':mlp}
+    print('we are trying to classify label \'cardio\'')   
+    print('+--------------------------------------------+')
+    print('|                  cardio                    |')
+    print('+--------------------------------------------+') 
+    data_util.cross_validation(clfs, X, y_true_cardio, num_fold = 10)
+
 
 
     y_true_cardio_onehot = to_categorical(y_true_cardio)
     y_true_gender_onehot = to_categorical(y_true_gender)
+
+
 
 
     unique, counts = np.unique(y_true_gender_onehot, return_counts=True)
@@ -179,9 +215,7 @@ def main():
               optimizer=optimizers.Adam(lr = 0.001),
               metrics=['accuracy'])
     print('let the game start')
-
-
-    clfs = {'MLP':mlp}
+    clfs = {'MLP_multilabel':mlp}
     cross_validation(clfs, X, y_true, cardio_dict, gender_dict, num_fold = 10)
 
 
