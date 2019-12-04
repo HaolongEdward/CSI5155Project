@@ -29,6 +29,8 @@ def Nemenyi_Test():
 	# mlp = [0.333, 0.133, 0.0, 0.0, 0.133, 0.267, 0.463, 0.066, 0.641, 0.64, 0.646, 0.663, 0.637, 0.639, 0.663, 0.665, 0.066, 0.066, 0.0, 0.0, 0.0, 0.265, 0.0, 0.0, 0.724, 0.72, 0.756, 0.757, 0.722, 0.72, 0.757, 0.76]
 
 	# stat, p = friedmanchisquare(knn, dt, nb, rb, mlp)
+	# matrix = np.array([knn, dt, nb, rb, mlp])
+	# names = ['knn', 'dt', 'nb', 'rb', 'mlp']
 
 
 	voting = [0.642, 0.644, 0.658, 0.659, 0.641, 0.642, 0.658, 0.661, 0.576, 0.577, 0.605, 0.609, 0.575, 0.577, 0.604, 0.606, 0.685, 0.685, 0.713, 0.714, 0.685, 0.686, 0.708, 0.708, 0.686, 0.687, 0.734, 0.734, 0.686, 0.687, 0.735, 0.735]
@@ -38,6 +40,8 @@ def Nemenyi_Test():
 	nb_ada_boosting = [0.508, 0.513, 0.415, 0.512, 0.508, 0.513, 0.469, 0.378, 0.414, 0.41, 0.378, 0.414, 0.414, 0.41, 0.412, 0.384, 0.407, 0.472, 0.219, 0.495, 0.407, 0.472, 0.476, 0.581, 0.37, 0.569, 0.481, 0.504, 0.37, 0.569, 0.506, 0.523]
 
 	stat, p = friedmanchisquare(voting, dt_ada_boosting, nb_ada_boosting)
+	matrix = np.array([voting, dt_ada_boosting, nb_ada_boosting])
+	names = ['Voting', 'DT-Ada-Boosting', 'NB-Ada-Boosting']
 
 
 	print('Statistics=%.3f, p=%.3f' % (stat, p))
@@ -48,21 +52,21 @@ def Nemenyi_Test():
 	else:
 		print('Different distributions (reject H0)')
 
-	matrix = np.array([voting, dt_ada_boosting, nb_ada_boosting])
 	matrix = matrix.transpose()
 	matrix_ranking = []
+	# >>> a = [1,2,3,4,3,2,3,4]
+	# >>> rankdata([-1 * i for i in row]).astype(int)
 	for row in matrix:
-		matrix_ranking.append(list(ss.rankdata(row)))
+		matrix_ranking.append(list(ss.rankdata([-1 * i for i in row])))
 		# print(ss.rankdata(row))
 	matrix_ranking = np.array(matrix_ranking).transpose()
 
 
-	names = ['Voting', 'DT-Ada-Boosting', 'NB-Ada-Boosting']
 	avranks = np.average(matrix_ranking, axis=1)
 	print(avranks)
 	cd = Orange.evaluation.compute_CD(avranks, 32) #tested on 30 datasets
 	Orange.evaluation.graph_ranks(avranks, names, cd=cd, width=6, textspace=1.5)
-	plt.savefig('Critical difference diagram.pdf')
+	plt.savefig('Ensumble ML Critical difference diagram.pdf')
 
 
 # function for calculating the t-test for two independent samples
@@ -91,7 +95,7 @@ def dependent_ttest(data1, data2, alpha):
 	return t_stat, df, cv, p
  
 
-def main():
+def paired_t():
 	# seed the random number generator
 	# seed(1)
 	# generate two independent samples
@@ -133,6 +137,9 @@ def main():
 		print('Reject the null hypothesis that the means are equal.')
 
 
+def main():
+	Nemenyi_Test()
+	
 
 if __name__ == '__main__':
 	main()
