@@ -153,7 +153,7 @@ def main():
     exclusive_all_did_wrong=True,
     is_clean_blood_pressure = True,
     save = False, new_filename = None,
-    PCA = False,
+    PCA = True,
     is_using_onehot = True,
     include_gender = True,
     secondary_label = 'gender')
